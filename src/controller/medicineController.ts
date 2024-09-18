@@ -41,10 +41,17 @@ const readMedicine = async (
     res: Response
 ) => {
     try {
-       const allMedicine = await prisma.medicine.findMany()
+       const search = req.query.search
+       const allMedicine = await prisma.medicine.findMany({
+        where: {
+            OR: [
+                {name: {contains: search?.toString() || ""}},                                     
+           ]
+         }
+       })
        return res.status(200).json({
-        message: `medicine has been retri`,
-        data: allMedicine
+       message: `medicine has been retri`,
+       data: allMedicine
        })
     } catch (error){
         res.status(500).json(error)
