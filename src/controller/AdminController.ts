@@ -1,10 +1,11 @@
-import { Request, Response } from "express";
+import { request, Request, response, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { error } from "console";
 import path from "path";
 import fs from "fs";
 import { ROOT_DIRECTORY } from "../config";
 import bcrypt from "bcrypt"
+import jwt from "jsonwebtoken"
 
 const prisma = new PrismaClient({errorFormat:"minimal"})
 
@@ -23,12 +24,12 @@ const createAdmin = async (
             return res.status(400).json({ message: "email has exist "})
         }
         const hashPassword = await bcrypt.hash(password, 12)
-        
+
         const newAdmin = await prisma.admin.create({
             data: {
                 username,
                 email,
-                password 
+                password: hashPassword
             }
         });
 
@@ -135,4 +136,50 @@ const deleteAdmin = async (
     }
 }
 
-export { createAdmin, readAdmin, updateAdmin, deleteAdmin }
+/** function for login (authentication) */
+const authentication = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const {email, password} = req.body
+        /** check existing email */
+        const findAdmin = await prisma.admin.findFirst({
+            where: { email }
+        })
+
+        if(!findAdmin){
+            return res.status(200).json({
+                message: `email is not registered`
+            })
+        }
+
+        const isMatchPassword = await bcrypt.compare(password, findAdmin.password)
+
+        if(!isMatchPassword){
+            return res.status(200).json({
+                message: `invalid password`
+            })
+        }
+
+        /** prepare to generate token using jwt */
+        const payload = {
+            name: findAdmin.username,
+            email: findAdmin.email
+        }
+        const signature = process.env.SECRET || ``
+
+        const token = jwt.sign(payload, signature)
+
+        return res.status(200).json({
+            logged: true,
+            token,
+            id: findAdmin.id,
+            name: findAdmin.username,
+            email: findAdmin.email
+        })
+    } catch (error) {
+        return res.status(500).json(error)
+    }
+}
+export { createAdmin, readAdmin, updateAdmin, deleteAdmin, authentication }
